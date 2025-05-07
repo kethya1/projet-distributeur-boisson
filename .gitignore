@@ -50,3 +50,31 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+
+# Fichiers temporaires Arduino
+*.hex
+*.elf
+*.eep
+*.bin
+*.d
+*.o
+*.obj
+
+# Fichiers temporaires système
+Thumbs.db
+.DS_Store
+
+# Fichiers Fusion 360, Solidworks temporaires
+~$*
+*.bak
+*.tmp
+
+# Cache de logiciels de CAO
+*.log
+*.autosave
+*.swp
+*.slddrw
+
+# Jetables ou de prévisualisation
+__MACOSX/
