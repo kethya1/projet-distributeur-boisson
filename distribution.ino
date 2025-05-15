@@ -1,9 +1,6 @@
 #include <LiquidCrystal_I2C.h>
 
 ////////////////////Prototypes de fonctions////////////////////////////
-
-void setup();
-void loop();
 void message_choix();
 void menu_boisson();
 void choixMenu();
@@ -11,32 +8,42 @@ void valideSelection();
 void detecte_presence();  
 void resetEtat();
 void distribution_boisson();
-void detection_niveau();
 void jouerBuzzer(int duree);
 void afficherBarreProgression(unsigned long tempsEcoule);
-void detectepiece();
+bool detectepiece();
+
 ///////////////////////////////////////////////////////////////////////
 
 // Configuration des broches et variables
 #define LED_PIN 10
 #define PINPRESENCE 8
-#define BTN_SELECT A0  // Bouton pour la sélection
-#define BTN_NAVIGATE A1  // Bouton pour la navigation
+#define BTN_SELECT A0
+#define BTN_NAVIGATE A1
 #define BUZZER 6 
-const int pinPompeEau = 9;  // Pin pour la pompe à eau
-const int pinPompeJus = 11; // Pin pour la pompe à jus
-LiquidCrystal_I2C lcd(0x20, 16, 2); // Configure l’adresse I2C et la taille de l’écran LCD (16x2)
-const int dureeDistribution=20000;
-const int nombreSegments = 16; // Nombre de segments pour la barre de progression (16 caractères par ligne)
+#define PINPIECE 7
 
-// Variables de gestion des choix
+LiquidCrystal_I2C lcd(0x20, 16, 2);
+const int pinPompeEau = 9;
+const int pinPompeJus = 11;
+const int dureeDistribution = 20000;
+const int nombreSegments = 16;
+
 int selectBtnVal = 0;
 int navigateBtnVal = 0;
 int currentSelection = 0;
-bool boissonSelectionnee = false;
-const int nombreBoissons = 2; // Nombre de choix 
-const char* boissons[] = {"Jus", "Eau"}; // Liste des boissons
-bool pompeEtat = false; 
+const int nombreBoissons = 2;
+const char* boissons[] = {"Jus", "Eau"};
+bool pompeEtat = false;
+
+// Machine à états
+enum EtatSysteme {
+  ETAT_ATTENTE_PIECE,
+  ETAT_CHOIX_BOISSON,
+  ETAT_DISTRIBUTION,
+  ETAT_FIN
+};
+
+EtatSysteme etatActuel = ETAT_ATTENTE_PIECE; //Attendre insertion pièce
 
 void setup() {
   pinMode(PINPRESENCE, INPUT); 
@@ -49,35 +56,66 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);          
   pinMode(BUZZER, OUTPUT);
+  pinMode(PINPIECE, INPUT);
 
   lcd.init();
   lcd.backlight();
-
-  // Afficher directement la sélection des boissons
-  message_choix();
-  menu_boisson();
-  
   Serial.begin(19200);
 }
 
 void loop() {
-  selectBtnVal = digitalRead(BTN_SELECT);
-  navigateBtnVal = digitalRead(BTN_NAVIGATE);
-  detecte_presence();
+  detecte_presence();  // Toujours détecter présence gobelet 
 
-  if (!boissonSelectionnee && (selectBtnVal == LOW || navigateBtnVal == LOW)) {
-    while (!boissonSelectionnee) {
-      detecte_presence(); 
-      if (digitalRead(BTN_NAVIGATE) == LOW) {
+  switch (etatActuel) {
+    case ETAT_ATTENTE_PIECE:
+      lcd.setCursor(0, 0);
+      lcd.print("Inserez piece...  ");
+      lcd.setCursor(0, 1);
+      lcd.print("                  ");
+      if (detectepiece()) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Piece detectee !");
+        delay(1000);
+        message_choix();
+        menu_boisson();
+        etatActuel = ETAT_CHOIX_BOISSON;
+      }
+      delay(300);
+      break;
+
+    case ETAT_CHOIX_BOISSON:
+      selectBtnVal = digitalRead(BTN_SELECT);
+      navigateBtnVal = digitalRead(BTN_NAVIGATE);
+
+      if (navigateBtnVal == LOW) {
         choixMenu();
-        delay(300); 
+        delay(300);
+      } else if (selectBtnVal == LOW) {
+        valideSelection();  // Affiche le choix
+        etatActuel = ETAT_DISTRIBUTION;
+        delay(300);
       }
-      if (digitalRead(BTN_SELECT) == LOW) {
-        valideSelection();
-        delay(300); 
-      }
-    }
+      break;
+
+    case ETAT_DISTRIBUTION:
+      distribution_boisson();
+      etatActuel = ETAT_FIN;
+      break;
+
+    case ETAT_FIN:
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Merci !"); //
+      delay(2000);
+      resetEtat();
+      etatActuel = ETAT_ATTENTE_PIECE;
+      break;
   }
+}
+
+bool detectepiece() {
+  return digitalRead(PINPIECE) == HIGH;
 }
 
 void message_choix() {
@@ -93,7 +131,7 @@ void menu_boisson() {
   lcd.clear();
   for (int i = 0; i < nombreBoissons; i++) {
     lcd.setCursor(0, i);
-    if (i == currentSelection) { //affichage > 
+    if (i == currentSelection) {
       lcd.print("> ");
     } else {
       lcd.print("  ");
@@ -108,18 +146,16 @@ void choixMenu() {
 }
 
 void valideSelection() {
-  boissonSelectionnee = true;
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Boisson: ");
   lcd.setCursor(0, 1);
   lcd.print(boissons[currentSelection]);
   delay(2000); 
-  distribution_boisson(); 
 }
 
 void detecte_presence() {
-  if (digitalRead(PINPRESENCE) == LOW) { 
+  if (digitalRead(PINPRESENCE) == LOW) {
     digitalWrite(LED_PIN, LOW);  
   } else {
     digitalWrite(LED_PIN, HIGH);
@@ -132,25 +168,25 @@ void distribution_boisson() {
   lcd.print("Distribution...");
 
   jouerBuzzer(500);
-  
+
   unsigned long debutDistribution = millis();
 
-  if (currentSelection == 0) { 
+  if (currentSelection == 0) {
     digitalWrite(pinPompeJus, HIGH);
-  } else { 
+  } else {
     digitalWrite(pinPompeEau, HIGH);
   }
-  
+
   pompeEtat = true;
   while (pompeEtat) {
     unsigned long tempsEcoule = millis() - debutDistribution;
-    if (tempsEcoule >= dureeDistribution) { 
+    if (tempsEcoule >= dureeDistribution) {
       break;
     }
 
     afficherBarreProgression(tempsEcoule);
 
-    if (digitalRead(PINPRESENCE) == LOW) { 
+    if (digitalRead(PINPRESENCE) == LOW) {
       digitalWrite(LED_PIN, LOW);
       lcd.clear();
       lcd.setCursor(0, 0);
@@ -160,25 +196,22 @@ void distribution_boisson() {
     }
     delay(100);
   }
-  
+
   digitalWrite(pinPompeEau, LOW);
   digitalWrite(pinPompeJus, LOW);
   pompeEtat = false;
 
-  jouerBuzzer(1000); // signaler la fin de la distribution
-  
+  jouerBuzzer(1000);
+
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Boisson servie!");
   delay(2000);
-  resetEtat(); 
 }
 
 void resetEtat() {
-  boissonSelectionnee = false;
-  currentSelection = 0;        
-  message_choix();
-  menu_boisson();
+  currentSelection = 0;
+  lcd.clear();
 }
 
 void jouerBuzzer(int duree) {
@@ -198,4 +231,6 @@ void afficherBarreProgression(unsigned long tempsEcoule) {
     }
   }
 }
+
+
 
