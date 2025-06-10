@@ -28,7 +28,7 @@ Ce projet consiste en la création d’un distributeur de boisson fonctionnel av
 | Type | Éléments utilisés |
 |------|--------------------|
 | ⚙️ Mécanique | Modélisation 3D sur Fusion 360, impression 3D, découpe laser |
-| 🔌 Électronique | Arduino UNO, capteur IR, 16x2 LCD, MOSFETs, pompes 12V, batterie 12V |
+| 🔌 Électronique | Arduino UNO, capteur IR, 16x2 LCD, MOSFETs,  2 pompes 12V, batterie 12V, L7805ACV |
 | 💻 Logiciel | Arduino IDE |
 
 
